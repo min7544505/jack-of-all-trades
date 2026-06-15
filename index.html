@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>다재다능 스택 측정기</title>
+<style>
+  :root {
+    --bg: #0a1428;
+    --bg2: #0f1c33;
+    --panel: #11233f;
+    --panel2: #16294a;
+    --border: #1e3a5f;
+    --gold: #c8aa6e;
+    --gold-bright: #f0e6d2;
+    --teal: #0acbe6;
+    --teal-dim: #0a4b54;
+    --green: #1fd6a0;
+    --gray: #5b6b80;
+    --text: #cdd9e8;
+    --muted: #7e8fa5;
+    --danger: #d65a5a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: radial-gradient(1200px 600px at 50% -10%, #13294a 0%, var(--bg) 60%);
+    color: var(--text); font-family: "Pretendard", "Malgun Gothic", system-ui, sans-serif;
+    min-height: 100vh; padding: 24px 16px 64px;
+  }
+  .wrap { max-width: 1600px; margin: 0 auto; }
+  header h1 {
+    margin: 0 0 4px; font-size: 26px; letter-spacing: -0.5px;
+    color: var(--gold-bright);
+  }
+  header h1 .accent { color: var(--gold); }
+  .sub { color: var(--muted); font-size: 13px; margin: 0 0 2px; }
+  .patch { display:inline-block; font-size: 12px; color: var(--gold);
+    border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; margin-top: 6px; }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; }
+  .grid-cols { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; margin-top: 18px; align-items: start; }
+  @media (max-width: 880px){ .grid-cols { grid-template-columns: 1fr; } }
+
+  /* 빌드 슬롯 */
+  .build { padding: 16px; }
+  .build h2, .picker h2, .results h2 { font-size: 14px; color: var(--gold); margin: 0 0 12px;
+    text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
+  .slots { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+  @media (max-width: 520px){ .slots { grid-template-columns: repeat(3, 1fr); } }
+  .slot {
+    aspect-ratio: 1; border: 2px dashed var(--border); border-radius: 10px;
+    display: flex; align-items: center; justify-content: center; position: relative;
+    background: var(--bg2); cursor: pointer; overflow: hidden;
+  }
+  .slot.filled { border-style: solid; border-color: var(--gold); cursor: pointer; }
+  .slot img { width: 100%; height: 100%; object-fit: cover; }
+  .slot .x { position: absolute; top: 2px; right: 4px; color: var(--gold-bright);
+    background: rgba(0,0,0,.6); border-radius: 6px; font-size: 12px; line-height: 1;
+    padding: 2px 5px; opacity: 0; transition: .15s; }
+  .slot.filled:hover .x { opacity: 1; }
+  .slot .plus { color: var(--gray); font-size: 22px; }
+  .build-meta { margin-top: 12px; font-size: 12px; color: var(--muted); display:flex; justify-content: space-between; }
+  .btn { background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 12px; cursor: pointer; font-size: 12px; }
+  .btn:hover { border-color: var(--gold); color: var(--gold-bright); }
+
+  /* 빌드 리스트 (각 아이템 + 효과가 바로 붙음) */
+  .rightcol { display: flex; flex-direction: column; gap: 16px; }
+  .stack-layout { display: flex; flex-direction: column; gap: 16px; }
+
+  /* 결과 바 (상단 가로) */
+  .resultbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 22px; padding: 14px 18px; }
+  .resultbar .stack-num { font-size: 44px; }
+  .rb-stack { display: flex; flex-direction: column; gap: 2px; }
+  .rb-stack > div { display: flex; align-items: baseline; gap: 8px; }
+  .resultbar .stack-note { margin: 0; min-height: 0; }
+  .resultbar .thresholds { margin: 0; flex: 0 0 auto; }
+  .resultbar .bonuses { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+  .rb-legend { flex: 1 1 260px; min-width: 0; margin-top: 0; }
+  .rb-legend h3 { margin: 0 0 6px; }
+
+  /* 빌드: 고정 6칸 그리드(처음부터 1/6 크기로 한 칸씩 채움), 카드 클릭 시 제거 */
+  .buildrow { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; align-items: stretch; }
+  .buildslot { border: 2px dashed var(--border); border-radius: 10px; background: var(--bg2);
+    display: flex; align-items: center; justify-content: center; min-height: 96px; }
+  .buildslot .plus { font-size: 26px; color: var(--gray); }
+  .builditem { min-width: 0; position: relative; cursor: pointer; background: var(--bg2);
+    border: 1px solid var(--border); border-radius: 10px; padding: 10px; transition: border-color .12s; }
+  .builditem:hover { border-color: var(--danger); }
+  .builditem:hover .bi-removehint { opacity: 1; }
+  .builditem .bi-head img { width: 36px; height: 36px; }
+  .builditem .dn { font-size: 12.5px; }
+  .builditem .dg { font-size: 11px; }
+  .builditem .statlist { font-size: 11px; }
+  .builditem .statlist li { padding: 3px 6px; }
+  .builditem .statlist .mark { white-space: nowrap; }
+  .builditem .ddesc-label { margin: 8px 0 4px; }
+  .builditem .ddesc { font-size: 11px; line-height: 1.5; padding-top: 6px; }
+  .bi-removehint { position: absolute; top: 6px; right: 6px; font-size: 10.5px; color: var(--danger);
+    background: rgba(0,0,0,.55); border-radius: 6px; padding: 2px 6px; opacity: 0; transition: .12s; }
+  .bi-head { display: flex; align-items: center; gap: 10px; }
+  .bi-head img { width: 44px; height: 44px; border-radius: 8px; border: 1px solid var(--gold); flex: 0 0 auto; }
+  .bi-title { flex: 1 1 auto; min-width: 0; }
+  .bi-title .dn { color: var(--gold-bright); font-weight: 700; font-size: 14px; }
+  .bi-title .dg { color: var(--gold); font-size: 12px; }
+  .bi-remove { flex: 0 0 auto; width: 28px; height: 28px; background: var(--panel2); color: var(--muted);
+    border: 1px solid var(--border); border-radius: 8px; cursor: pointer; font-size: 12px; }
+  .bi-remove:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* 결과 */
+  .results { padding: 18px; }
+  .stack-head { display: flex; align-items: baseline; gap: 10px; }
+  .stack-num { font-size: 56px; font-weight: 800; color: var(--gold-bright); line-height: 1; }
+  .stack-cap { font-size: 22px; color: var(--muted); font-weight: 700; }
+  .stack-note { font-size: 12px; color: var(--teal); margin: 6px 0 0; min-height: 16px; }
+  .bonuses { display: grid; gap: 8px; margin: 16px 0 4px; }
+  .bonus { display: flex; justify-content: space-between; align-items:center;
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; }
+  .bonus.locked { opacity: .42; }
+  .bonus .lbl { font-size: 13px; }
+  .bonus .val { font-size: 14px; font-weight: 700; color: var(--gold); }
+  .bonus.hit .val { color: var(--green); }
+  .thresholds { display:flex; gap: 8px; margin-top: 10px; }
+  .thr { flex:1; text-align:center; font-size: 11px; padding: 6px 4px; border-radius: 8px;
+    border: 1px solid var(--border); color: var(--muted); }
+  .thr.on { border-color: var(--green); color: var(--green); background: rgba(31,214,160,.08); }
+
+  /* 스탯 레전드 */
+  .legend { margin-top: 18px; }
+  .legend h3 { font-size: 12px; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 11.5px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--border);
+    color: var(--gray); background: var(--bg2); cursor: default; transition: .12s; }
+  .chip.on { color: #06241c; background: var(--green); border-color: var(--green); font-weight: 700; }
+  .chip.on .cnt { opacity: .7; }
+
+  /* 아이템 선택기 */
+  .picker { padding: 16px; }
+  .picker-bottom { margin-top: 16px; }
+  .search { width: 100%; padding: 10px 12px; border-radius: 9px; border: 1px solid var(--border);
+    background: var(--bg2); color: var(--text); font-size: 14px; margin-bottom: 12px; }
+  .search:focus { outline: none; border-color: var(--gold); }
+  .picker-tools { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 0 0 8px; }
+  .picker-tools .count { margin: 0; }
+  .sortlabel { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .sortsel { background: var(--bg2); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+    padding: 5px 8px; font-size: 12px; cursor: pointer; }
+  .sortsel:focus { outline: none; border-color: var(--gold); }
+  .filters { display:flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .fchip { font-size: 11px; padding: 3px 9px; border-radius: 999px; border:1px solid var(--border);
+    background: var(--bg2); color: var(--muted); cursor:pointer; }
+  .fchip.active { border-color: var(--gold); color: var(--gold); }
+  .tierfilters { margin-top: -4px; }
+  .fchip.tier.active { border-color: var(--teal); color: var(--teal); }
+  .items { max-height: 520px; overflow-y: auto; padding: 4px; }
+  .item-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 8px; align-content: start; }
+  .item-group { margin-bottom: 14px; }
+  .group-head { font-size: 12px; color: var(--gold); font-weight: 700; margin: 2px 2px 8px;
+    border-bottom: 1px solid var(--border); padding-bottom: 5px; letter-spacing: .5px; }
+  .group-head span { color: var(--muted); font-weight: 400; margin-left: 4px; }
+  .item { position: relative; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+    cursor: pointer; background: var(--bg2); aspect-ratio: 1; }
+  .item img { width: 100%; height: 100%; object-fit: cover; display:block; }
+  .item:hover { border-color: var(--gold); transform: translateY(-1px); }
+  .item.in-build { outline: 2px solid var(--green); }
+  .item.in-build::after { content: "✓"; position: absolute; top: 1px; right: 3px; color: var(--green);
+    font-weight: 800; font-size: 13px; text-shadow: 0 0 3px #000; }
+  .count { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+
+  .loading, .error { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .error { color: var(--danger); }
+  .tip { font-size: 11.5px; color: var(--muted); margin-top: 10px; line-height: 1.5; }
+  a { color: var(--teal); }
+
+  /* 툴팁 */
+  .tt { position: relative; }
+  .tt:hover .tt-body { display: block; }
+  .tt-body { display:none; position: absolute; z-index: 30; bottom: calc(100% + 6px); left: 50%;
+    transform: translateX(-50%); background: #050b18; border: 1px solid var(--gold);
+    border-radius: 8px; padding: 8px 10px; width: 180px; font-size: 11px; color: var(--text);
+    box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  .tt-body b { color: var(--gold-bright); }
+
+  /* 선택 아이템 상세 (정확성 검증) */
+  .details-wrap { margin-top: 16px; padding: 16px; }
+  .details-wrap h2 { font-size: 14px; color: var(--gold); margin: 0 0 12px;
+    text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
+  .verify-tag { font-size: 11px; color: var(--teal); border: 1px solid var(--teal-dim);
+    border-radius: 999px; padding: 2px 8px; margin-left: 6px; vertical-align: middle;
+    letter-spacing: 0; text-transform: none; font-weight: 600; }
+  .details-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .detail { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+  .detail-head { display: flex; gap: 10px; align-items: center; }
+  .detail-head img { width: 42px; height: 42px; border-radius: 8px; border: 1px solid var(--gold); }
+  .detail-head .dn { color: var(--gold-bright); font-weight: 700; font-size: 14px; }
+  .detail-head .dg { color: var(--gold); font-size: 12px; }
+  .statlist { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 3px; }
+  .statlist li { display: flex; justify-content: space-between; gap: 8px; font-size: 12px;
+    padding: 4px 8px; border-radius: 6px; }
+  .statlist li.cnt-yes { background: rgba(31,214,160,.10); }
+  .statlist li.cnt-yes .mark { color: var(--green); font-weight: 700; white-space: nowrap; }
+  .statlist li.cnt-no { color: var(--muted); }
+  .statlist li.cnt-no .mark { color: var(--gray); white-space: nowrap; }
+  .statlist b { color: var(--gold-bright); }
+  .ddesc-label { font-size: 11px; color: var(--muted); margin: 10px 0 4px; font-weight: 600; }
+  .ddesc { font-size: 12px; line-height: 1.6; color: var(--text);
+    border-top: 1px solid var(--border); padding-top: 8px; }
+  .ddesc mainText { display: block; }
+  .ddesc attention { color: var(--gold-bright); font-weight: 600; }
+  .ddesc passive { color: var(--gold); font-weight: 700; }
+  .ddesc active { color: #e0b0ff; font-weight: 700; }
+  .ddesc rarityMythic { color: #ff9b00; font-weight: 700; }
+  .ddesc rarityLegendary { color: #ff8270; }
+  .ddesc rarityGeneric, .ddesc rules, .ddesc flavorText { color: var(--muted); }
+  .ddesc scaleAD, .ddesc physicalDamage, .ddesc OnHit { color: #ff9166; }
+  .ddesc scaleAP, .ddesc magicDamage { color: #4ec0ff; }
+  .ddesc scaleHealth, .ddesc healing, .ddesc lifeSteal { color: #5fe39a; }
+  .ddesc scaleMana, .ddesc speed { color: #59d3ff; }
+  .ddesc trueDamage { color: #fff; font-weight: 600; }
+  .ddesc status, .ddesc keyword, .ddesc keywordStealth, .ddesc keywordMajor { color: #d6e0ee; font-weight: 600; }
+  .ddesc shield { color: #cfe08a; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>다재다능 <span class="accent">스택 측정기</span></h1>
+    <p class="sub">소환사 협곡 아이템을 골라 빌드를 짜면, <b>서로 다른 스탯 종류</b>의 개수로 Jack 스택을 계산합니다. (아이템 패시브/액티브 스탯은 제외, 기본 스탯만)</p>
+    <span class="patch" id="patch">데이터 로딩 중…</span>
+  </header>
+
+  <div id="app">
+    <div class="loading">DDragon에서 최신 아이템 데이터를 받아오는 중…</div>
+  </div>
+</div>
+
+<script>
+/* ──────────────────────────────────────────────────────────────────────────
+   다재다능(Jack of All Trades) 핵심 로직 — build-data.mjs와 동일하게 유지
+   ────────────────────────────────────────────────────────────────────────── */
+
+// 스택으로 인정되는 스탯 종류 (이동속도/마법관통력은 고정·% 별개)
+const ELIGIBLE_STATS = [
+  { key: 'ad', label: '공격력' }, { key: 'ap', label: '주문력' },
+  { key: 'as', label: '공격 속도' }, { key: 'ah', label: '스킬 가속' },
+  { key: 'hp', label: '체력' }, { key: 'armor', label: '방어력' },
+  { key: 'mr', label: '마법 저항력' }, { key: 'crit', label: '치명타 확률' },
+  { key: 'critdmg', label: '치명타 피해량' }, { key: 'ms_flat', label: '이동 속도(고정)' },
+  { key: 'ms_percent', label: '이동 속도(%)' }, { key: 'mana', label: '마나' },
+  { key: 'mp5', label: '기본 마나 재생' }, { key: 'hp5', label: '기본 체력 재생' },
+  { key: 'healshield', label: '체력 회복 및 보호막' }, { key: 'lifesteal', label: '생명력 흡수' },
+  { key: 'omnivamp', label: '모든 피해 흡혈' }, { key: 'lethality', label: '물리 관통력' },
+  { key: 'armorpen_percent', label: '방어구 관통력(%)' }, { key: 'magicpen_flat', label: '마법 관통력(고정)' },
+  { key: 'magicpen_percent', label: '마법 관통력(%)' }, { key: 'tenacity', label: '강인함' },
+  { key: 'goldgen', label: '10초당 골드' }, { key: 'range', label: '사거리' },
+];
+const STAT_LABEL = Object.fromEntries(ELIGIBLE_STATS.map(s => [s.key, s.label]));
+
+// 역할(분류) — 인게임 상점처럼 원딜/암살자/마법사 등으로 묶기. 아이템 tags 기반 휴리스틱.
+const ROLE_DEFS = [
+  { key: 'marksman', label: '원딜' }, { key: 'assassin', label: '암살자' },
+  { key: 'mage', label: '마법사' }, { key: 'fighter', label: '전사' },
+  { key: 'tank', label: '탱커' }, { key: 'support', label: '서포터' },
+  { key: 'boots', label: '신발' },
+];
+function itemRoles(tags, keys) {
+  const T = new Set(tags || []);
+  const K = new Set(keys || []);
+  // keys(파싱 스탯) + tags 를 합쳐 신호로 사용 (패시브로만 스탯 주는 아이템은 keys가 비어 tags로 보완)
+  const AD = K.has('ad') || T.has('Damage');
+  const AP = K.has('ap') || T.has('SpellDamage');
+  const HP = K.has('hp') || T.has('Health');
+  const ARM = K.has('armor') || T.has('Armor');
+  const MR = K.has('mr') || T.has('SpellBlock') || T.has('MagicResist');
+  const CRIT = K.has('crit') || T.has('CriticalStrike');
+  const AS = K.has('as') || T.has('AttackSpeed');
+  const LETH = K.has('lethality') || K.has('armorpen_percent') || T.has('ArmorPenetration');
+  const VAMP = K.has('lifesteal') || K.has('omnivamp') || T.has('LifeSteal') || T.has('SpellVamp');
+  const AH = K.has('ah') || T.has('AbilityHaste') || T.has('CooldownReduction');
+  const r = [];
+  if (T.has('Boots')) r.push('boots');
+  if (AP) r.push('mage');
+  if (CRIT || AS || T.has('OnHit') || (VAMP && AD && !AP)) r.push('marksman');
+  if (LETH) r.push('assassin');
+  if (AD && !CRIT && (HP || ARM || MR || VAMP || AH)) r.push('fighter');
+  if (ARM || MR || (HP && !AD && !AP)) r.push('tank');
+  if (T.has('GoldPer') || K.has('healshield') ||
+      ((T.has('Aura') || T.has('Active')) && (K.has('mp5') || K.has('mana')) && !AD)) r.push('support');
+  return r;
+}
+
+// 급(tier): from/into 빌드트리로 판정 (depth는 빌드 단계수라 무한의 대검 같은 완성품을 서사로 오분류)
+function itemTier(it) {
+  const hasFrom = (it.from || []).length > 0;
+  const hasInto = (it.into || []).length > 0;
+  if (!hasFrom) return 'basic';      // 기본(부품/시작템)
+  if (!hasInto) return 'legendary';  // 전설(완성)
+  return 'epic';                     // 서사
+}
+
+const STAT_MAP = {
+  '공격력': 'ad', '주문력': 'ap', '공격 속도': 'as', '스킬 가속': 'ah', '체력': 'hp',
+  '방어력': 'armor', '마법 저항력': 'mr', '치명타 확률': 'crit', '치명타 피해량': 'critdmg',
+  '마나': 'mana', '기본 마나 재생': 'mp5', '기본 체력 재생': 'hp5', '체력 회복 및 보호막': 'healshield',
+  '생명력 흡수': 'lifesteal', '모든 피해 흡혈': 'omnivamp', '물리 관통력': 'lethality',
+  '방어구 관통력': 'armorpen_percent', '강인함': 'tenacity', '10초당 골드': 'goldgen',
+  '사거리': 'range', '적응형 능력치': 'adaptive',
+};
+const INELIGIBLE = new Set(['adaptive']);
+const STACK_CAP = 10;
+
+function mapStat(label, value) {
+  if (label === '이동 속도') return value.includes('%') ? 'ms_percent' : 'ms_flat';
+  if (label === '마법 관통력') return value.includes('%') ? 'magicpen_percent' : 'magicpen_flat';
+  return STAT_MAP[label] ?? null;
+}
+function parseStats(description) {
+  const out = [];
+  const block = /<stats>([\s\S]*?)<\/stats>/.exec(description || '');
+  if (!block) return out;
+  const re = /([^<>]+?)\s*<attention[^>]*>([^<]+)<\/attention>/g;
+  let m;
+  while ((m = re.exec(block[1]))) {
+    const label = m[1].replace(/<[^>]+>/g, '').trim();
+    const value = m[2].trim();
+    if (!label) continue;
+    const key = mapStat(label, value);
+    out.push({ label, value, key, eligible: key !== null && !INELIGIBLE.has(key) });
+  }
+  return out;
+}
+// 협곡에서 실제로 빌드하는 아이템만 (소모품/장신구/숨김/챔피언 전용 제외)
+const EXCLUDE_TAGS = new Set(['Consumable', 'Trinket']);
+const isSRItem = it => it?.maps?.['11'] === true && it?.gold?.purchasable === true
+  && it.hideFromAll !== true && !it.requiredChampion
+  && !(it.tags || []).some(t => EXCLUDE_TAGS.has(t));
+
+function buildItems(data, version, cdragon) {
+  // 이름별 최소 id(기본형) 엔트리의 maps — 협곡 네이티브 판정용
+  const base = {};
+  for (const [id, it] of Object.entries(data)) {
+    const n = it.name, idn = Number(id);
+    if (!(n in base) || idn < base[n].id) base[n] = { id: idn, sr: it.maps?.['11'] === true };
+  }
+  // 기본형(이름별 최소 id) 엔트리가 협곡(11)일 때만 인정 (아레나=기본형 맵 30 등, 삭제템=기본형 맵 빈 배열 제외).
+  const isNativeSR = it => { const b = base[it.name]; return !b || b.sr; };
+  // CDragon(게임 클라 데이터)로 칼바람(아이콘에 ARAM)·비상점 아이템 추가 제외. 없으면 통과(부분 검증).
+  const cdById = new Map((cdragon || []).map(x => [x.id, x]));
+  const isCdragonSR = name => {
+    if (!cdById.size) return true;
+    const cd = cdById.get(base[name].id);
+    return !!cd && cd.inStore === true && !/aram/i.test(cd.iconPath || '');
+  };
+
+  const items = [];
+  const unknown = new Set();
+  for (const [id, it] of Object.entries(data)) {
+    if (!isSRItem(it) || !isNativeSR(it) || !isCdragonSR(it.name)) continue;
+    const stats = parseStats(it.description);
+    stats.forEach(s => { if (s.key === null) unknown.add(s.label); });
+    const eligibleKeys = [...new Set(stats.filter(s => s.eligible).map(s => s.key))];
+    items.push({
+      id, name: it.name,
+      icon: `https://ddragon.leagueoflegends.com/cdn/${version}/img/item/${it.image.full}`,
+      gold: it.gold?.total ?? 0, depth: it.depth ?? 1, tier: itemTier(it), tags: it.tags ?? [], roles: itemRoles(it.tags, eligibleKeys), stats, eligibleKeys,
+      description: it.description,
+    });
+  }
+  if (unknown.size) console.warn('매핑되지 않은 스탯 표기(스택 미반영):', [...unknown]);
+  // 같은 이름 중복 제거 (모드별 변형 등) — 표준(가장 낮은 id)만 유지
+  const byName = new Map();
+  for (const it of items) {
+    const cur = byName.get(it.name);
+    if (!cur || Number(it.id) < Number(cur.id)) byName.set(it.name, it);
+  }
+  const deduped = [...byName.values()];
+  deduped.sort((a, b) => b.gold - a.gold || a.name.localeCompare(b.name, 'ko'));
+  return deduped;
+}
+
+function computeStacks(selected) {
+  const covered = new Map();
+  for (const it of selected)
+    for (const k of it.eligibleKeys) {
+      if (!covered.has(k)) covered.set(k, []);
+      covered.get(k).push(it.name);
+    }
+  const uniqueCount = covered.size;
+  const stacks = Math.min(uniqueCount, STACK_CAP);
+  const adaptive = stacks >= 10 ? 25 : stacks >= 5 ? 10 : 0;
+  return {
+    uniqueCount, stacks, covered,
+    abilityHaste: stacks,
+    adaptiveForce: adaptive,
+    bonusAD: Math.round(adaptive * 0.6),
+    bonusAP: adaptive,
+  };
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   UI
+   ────────────────────────────────────────────────────────────────────────── */
+let ALL_ITEMS = [];
+let BUILD = [];          // 선택된 아이템(최대 6)
+let SEARCH = '';
+let CATFILTER = '';      // 역할(분류) 필터
+let SORTMODE = 'gold-asc';
+
+// 아이템 정렬 옵션 (기본: 가격 낮은순)
+const SORTS = [
+  { key: 'gold-asc', label: '가격 낮은순', fn: (a, b) => a.gold - b.gold || a.name.localeCompare(b.name, 'ko') },
+  { key: 'gold-desc', label: '가격 높은순', fn: (a, b) => b.gold - a.gold || a.name.localeCompare(b.name, 'ko') },
+  { key: 'name', label: '이름순', fn: (a, b) => a.name.localeCompare(b.name, 'ko') },
+  { key: 'stacks', label: '스택 기여 많은순', fn: (a, b) => b.eligibleKeys.length - a.eligibleKeys.length || a.gold - b.gold },
+];
+
+// 급(tier) 필터
+const TIER_DEFS = [
+  { key: '', label: '전체 단계' },
+  { key: 'legendary', label: '전설(완성)' },
+  { key: 'epic', label: '서사' },
+  { key: 'basic', label: '기본' },
+];
+let TIERFILTER = '';
+
+const $ = sel => document.querySelector(sel);
+
+async function init() {
+  try {
+    const versions = await (await fetch('https://ddragon.leagueoflegends.com/api/versions.json')).json();
+    const version = versions[0];
+    const CDRAGON = 'https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/items.json';
+    const [itemJson, cdragon] = await Promise.all([
+      fetch(`https://ddragon.leagueoflegends.com/cdn/${version}/data/ko_KR/item.json`).then(r => r.json()),
+      fetch(CDRAGON).then(r => r.json()).catch(() => null),  // 게임 클라 데이터(협곡 교차검증). 실패 시 부분 검증.
+    ]);
+    ALL_ITEMS = buildItems(itemJson.data, version, cdragon);
+    $('#patch').textContent = `패치 ${version} · 협곡 아이템 ${ALL_ITEMS.length}개`;
+    renderApp();
+    render();
+  } catch (e) {
+    console.error(e);
+    $('#app').innerHTML = `<div class="error">데이터를 불러오지 못했습니다. 인터넷 연결을 확인하거나 잠시 후 다시 시도하세요.<br><small>${e.message}</small></div>`;
+  }
+}
+
+function renderApp() {
+  $('#app').innerHTML = `
+    <div class="stack-layout">
+      <section class="card resultbar">
+        <div class="rb-stack">
+          <div><span class="stack-num" id="stackNum">0</span><span class="stack-cap">/ ${STACK_CAP}</span></div>
+          <span class="stack-note" id="stackNote"></span>
+        </div>
+        <div class="thresholds">
+          <div class="thr" id="thr5">5스택<br>적응형 +10</div>
+          <div class="thr" id="thr10">10스택<br>적응형 +25</div>
+        </div>
+        <div class="bonuses" id="bonuses"></div>
+        <div class="legend rb-legend">
+          <h3>보유 스탯 <span id="coverCount"></span></h3>
+          <div class="chips" id="chips"></div>
+        </div>
+      </section>
+
+      <section class="card build">
+        <h2>내 빌드 <span class="verify-tag" id="buildCount">0/6</span>
+          <span class="verify-tag" style="border-color:var(--teal-dim)">카드 클릭 시 제거 · ✓ = 스택 반영</span></h2>
+        <div class="buildrow" id="buildList"></div>
+        <div class="build-meta">
+          <span id="goldTotal"></span>
+          <button class="btn" id="resetBtn">초기화</button>
+        </div>
+      </section>
+
+      <section class="card picker">
+        <h2>아이템 추가</h2>
+        <input class="search" id="search" placeholder="아이템 이름 검색… (예: 무한, 존야, 가호)" />
+        <div class="filters" id="filters"></div>
+        <div class="filters tierfilters" id="tierFilters"></div>
+        <div class="picker-tools">
+          <p class="count" id="itemCount"></p>
+          <label class="sortlabel">정렬 <select class="sortsel" id="sortMode"></select></label>
+        </div>
+        <div class="items" id="items"></div>
+      </section>
+    </div>`;
+
+  $('#search').addEventListener('input', e => { SEARCH = e.target.value.trim(); renderItems(); });
+  $('#resetBtn').addEventListener('click', () => { BUILD = []; render(); });
+  const sortSel = $('#sortMode');
+  sortSel.innerHTML = SORTS.map(s => `<option value="${s.key}">${s.label}</option>`).join('');
+  sortSel.value = SORTMODE;
+  sortSel.addEventListener('change', e => { SORTMODE = e.target.value; renderItems(); });
+  renderFilters();
+}
+
+function renderFilters() {
+  const wrap = $('#filters');
+  const mk = (key, label) => `<span class="fchip ${CATFILTER === key ? 'active' : ''}" data-k="${key}">${label}</span>`;
+  wrap.innerHTML = mk('', '전체') + ROLE_DEFS.map(c => mk(c.key, c.label)).join('');
+  wrap.querySelectorAll('.fchip').forEach(el =>
+    el.addEventListener('click', () => { CATFILTER = el.dataset.k; renderFilters(); renderItems(); }));
+
+  const tw = $('#tierFilters');
+  const mkt = (key, label) => `<span class="fchip tier ${TIERFILTER === key ? 'active' : ''}" data-k="${key}">${label}</span>`;
+  tw.innerHTML = TIER_DEFS.map(c => mkt(c.key, c.label)).join('');
+  tw.querySelectorAll('.fchip').forEach(el =>
+    el.addEventListener('click', () => { TIERFILTER = el.dataset.k; renderFilters(); renderItems(); }));
+}
+
+function render() {
+  renderBuild();
+  renderResults();
+  renderItems();
+}
+
+// 빌드 = 고정 6칸 그리드. 채워진 칸은 효과 카드(클릭 시 제거), 빈 칸은 placeholder.
+function renderBuild() {
+  const box = $('#buildList');
+  $('#buildCount').textContent = `${BUILD.length}/6`;
+  let html = '';
+  for (let i = 0; i < 6; i++) {
+    const it = BUILD[i];
+    if (!it) { html += '<div class="buildslot"><span class="plus">+</span></div>'; continue; }
+    const rows = it.stats.length
+      ? it.stats.map(s => `<li class="${s.eligible ? 'cnt-yes' : 'cnt-no'}">
+          <span>${s.label} <b>${s.value}</b></span>
+          <span class="mark">${s.eligible ? '스택 반영 ✓' : '미반영'}</span></li>`).join('')
+      : '<li class="cnt-no"><span>기본 스탯 없음</span><span class="mark">—</span></li>';
+    const effect = (it.description || '').replace(/<stats>[\s\S]*?<\/stats>/, '');
+    const hasEffect = effect.replace(/<[^>]+>/g, '').trim().length > 0;
+    html += `<div class="builditem" data-i="${i}" title="클릭하면 제거됩니다">
+      <span class="bi-removehint">✕ 제거</span>
+      <div class="bi-head">
+        <img src="${it.icon}" alt="${it.name}" loading="lazy">
+        <div class="bi-title"><div class="dn">${it.name}</div><div class="dg">${it.gold.toLocaleString()} G</div></div>
+      </div>
+      <ul class="statlist">${rows}</ul>
+      <div class="ddesc-label">아이템 효과(원문)</div>
+      <div class="ddesc">${hasEffect ? effect : '<span class="tip">고유 효과 없음 — 기본 스탯만 제공</span>'}</div>
+    </div>`;
+  }
+  box.innerHTML = html;
+  box.querySelectorAll('.builditem').forEach(el =>
+    el.addEventListener('click', () => { BUILD.splice(+el.dataset.i, 1); render(); }));
+  const gold = BUILD.reduce((s, it) => s + it.gold, 0);
+  $('#goldTotal').textContent = BUILD.length ? `${BUILD.length}개 · ${gold.toLocaleString()} 골드` : '아래에서 아이템을 선택하세요';
+}
+
+function renderResults() {
+  const r = computeStacks(BUILD);
+  $('#stackNum').textContent = r.stacks;
+  $('#stackNote').textContent = r.uniqueCount > STACK_CAP
+    ? `고유 스탯 ${r.uniqueCount}종 보유 → 상한 ${STACK_CAP}스택 적용`
+    : (r.uniqueCount ? `고유 스탯 ${r.uniqueCount}종` : '');
+
+  $('#thr5').classList.toggle('on', r.stacks >= 5);
+  $('#thr10').classList.toggle('on', r.stacks >= 10);
+
+  $('#bonuses').innerHTML = `
+    <div class="bonus ${r.stacks > 0 ? 'hit' : 'locked'}">
+      <span class="lbl">스킬 가속 <small style="color:var(--muted)">(스택당 +1)</small></span>
+      <span class="val">+${r.abilityHaste}</span></div>
+    <div class="bonus ${r.adaptiveForce > 0 ? 'hit' : 'locked'}">
+      <span class="lbl">적응형 능력치</span>
+      <span class="val">${r.adaptiveForce ? `+${r.adaptiveForce}` : '—'}
+        ${r.adaptiveForce ? `<small style="color:var(--muted)"> · 공${r.bonusAD} / 주${r.bonusAP}</small>` : ''}</span></div>`;
+
+  // 스탯 레전드 칩
+  const covered = r.covered;
+  $('#coverCount').textContent = covered.size ? `(${covered.size}종)` : '';
+  $('#chips').innerHTML = ELIGIBLE_STATS.filter(s => s.key !== 'range' || covered.has('range'))
+    .map(s => {
+      const on = covered.has(s.key);
+      const who = on ? covered.get(s.key).join(', ') : '';
+      return `<span class="chip ${on ? 'on' : ''} tt">${s.label}${on ? ` <span class="cnt">·${covered.get(s.key).length}</span>` : ''}
+        ${on ? `<span class="tt-body"><b>${s.label}</b><br>${who}</span>` : ''}</span>`;
+    }).join('');
+}
+
+function renderItems() {
+  let list = ALL_ITEMS;
+  if (SEARCH) list = list.filter(it => it.name.includes(SEARCH));
+  if (CATFILTER) list = list.filter(it => it.roles.includes(CATFILTER));
+  if (TIERFILTER) list = list.filter(it => it.tier === TIERFILTER);
+  const sort = SORTS.find(s => s.key === SORTMODE) || SORTS[0];
+  list = [...list].sort(sort.fn);
+  $('#itemCount').textContent = `${list.length}개 표시`;
+  const inBuild = new Set(BUILD.map(it => it.id));
+  const card = it => {
+    const keys = it.eligibleKeys.map(k => STAT_LABEL[k]).join(', ') || '인정 스탯 없음';
+    return `<div class="item tt ${inBuild.has(it.id) ? 'in-build' : ''}" data-id="${it.id}">
+      <img src="${it.icon}" alt="${it.name}" loading="lazy">
+      <span class="tt-body"><b>${it.name}</b><br>${it.gold.toLocaleString()}G<br>
+        <span style="color:var(--green)">${keys}</span></span>
+    </div>`;
+  };
+  if (TIERFILTER) {
+    $('#items').innerHTML = `<div class="item-grid">${list.map(card).join('')}</div>`;
+  } else {
+    // 전체 단계: 급(tier)별로 묶어 표시. 정렬 방향에 맞춤(가격 낮은순=기본→전설, 높은순=전설→기본).
+    const asc = [['basic', '기본'], ['epic', '서사'], ['legendary', '전설(완성)']];
+    const order = SORTMODE === 'gold-desc' ? [...asc].reverse() : asc;
+    $('#items').innerHTML = order.map(([key, label]) => {
+      const g = list.filter(it => it.tier === key);
+      if (!g.length) return '';
+      return `<div class="item-group"><div class="group-head">${label} <span>${g.length}</span></div>
+        <div class="item-grid">${g.map(card).join('')}</div></div>`;
+    }).join('');
+  }
+  $('#items').querySelectorAll('.item').forEach(el =>
+    el.addEventListener('click', () => toggleItem(el.dataset.id)));
+}
+
+function toggleItem(id) {
+  const idx = BUILD.findIndex(it => it.id === id);
+  if (idx >= 0) { BUILD.splice(idx, 1); render(); return; }
+  if (BUILD.length >= 6) { return; }
+  const it = ALL_ITEMS.find(x => x.id === id);
+  if (it) { BUILD.push(it); render(); }
+}
+
+init();
+</script>
+</body>
+</html>

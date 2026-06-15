@@ -1,0 +1,4 @@
+# 재생성 가능한 데이터 캐시 (앱은 DDragon/CDragon을 라이브로 받으므로 배포에 불필요)
+ddragon_item_raw.json
+/data/
+node_modules/
