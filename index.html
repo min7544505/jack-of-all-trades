@@ -260,9 +260,7 @@
   <footer class="site-footer">
     Made by <b>쩝쩝몬</b>
     <span class="dot">·</span>
-    문의 <a id="contactMail" href="#" rel="nofollow noopener">이메일</a>
-    <span class="dot">·</span>
-    <a href="https://github.com/min7544505/jack-of-all-trades" target="_blank" rel="noopener">GitHub</a>
+    <a href="https://x.com/hitthenshot" target="_blank" rel="noopener">X @hitthenshot</a>
   </footer>
 </div>
 
@@ -654,15 +652,6 @@ function toggleItem(id) {
 }
 
 init();
-
-// 문의 이메일은 봇 스크래핑 방지를 위해 JS로 조립 (정적 HTML 소스엔 노출되지 않음)
-(() => {
-  const m = document.getElementById('contactMail');
-  if (!m) return;
-  const user = 'min7544505', domain = 'naver.com';
-  m.href = 'mailto:' + user + '@' + domain;
-  m.textContent = user + '@' + domain;
-})();
 </script>
 </body>
 </html>
